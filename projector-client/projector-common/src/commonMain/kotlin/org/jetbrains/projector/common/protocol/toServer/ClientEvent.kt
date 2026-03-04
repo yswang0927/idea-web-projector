@@ -239,3 +239,15 @@ data class ClientNotificationEvent(
   val message: String,
   val notificationType: ClientNotificationType,
 ) : ClientEvent()
+
+// yswang add 添加一个打开项目的事件
+@Serializable
+data class ClientOpenProjectEvent(
+  val projectPath: String,
+) : ClientEvent()
+
+@Serializable
+data class ClientOpenFileEvent(
+  val filePath: String,
+  val line: Int = 0 // 可选：指定跳转行号
+) : ClientEvent()

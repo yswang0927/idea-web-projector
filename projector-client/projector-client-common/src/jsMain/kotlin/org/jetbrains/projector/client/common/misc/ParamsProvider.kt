@@ -68,6 +68,10 @@ actual object ParamsProvider {
   private const val DEFAULT_BLOCK_CLOSING = true
   private const val DEFAULT_SPECULATIVE_TYPING_LATENCY = 0
 
+  // yswang add 传递要打开的项目路径
+  private const val DEFAULT_PROJECT_PATH = "" // 默认路径为空
+
+
   val SYSTEM_SCALING_RATIO
     get() = window.devicePixelRatio  // get every time because it can be changed
   val USER_SCALING_RATIO: Double
@@ -76,6 +80,11 @@ actual object ParamsProvider {
   val HOST: String
   val PORT: String
   val PATH: String
+
+  val PROJECT_PATH: String? // yswang 声明新变量
+  val FILE_PATH: String? // yswang 声明新变量
+  val FILE_LINE: Int? // yswang 声明新变量
+
   val RELAY_SERVER_ID: String?
   val ENABLE_RELAY: Boolean get() = RELAY_SERVER_ID != null
   actual val LOG_UNSUPPORTED_EVENTS: Boolean
@@ -113,6 +122,11 @@ actual object ParamsProvider {
       HOST = searchParams.get("host") ?: DEFAULT_HOST
       PORT = searchParams.get("port") ?: if (ENABLE_RELAY) protocolPort() else DEFAULT_PORT
       PATH = searchParams.get("path") ?: DEFAULT_PATH
+      // yswang add 接收要打开的项目路径
+      PROJECT_PATH = searchParams.get("projectPath") ?: DEFAULT_PROJECT_PATH
+      FILE_PATH = searchParams.get("filePath") ?: ""
+      FILE_LINE = searchParams.get("lineNumber")?.toIntOrNull() ?: 0
+
       LOG_UNSUPPORTED_EVENTS = searchParams.has("logUnsupportedEvents")
       DOUBLE_BUFFERING = searchParams.get("doubleBuffering")?.toBoolean() ?: DEFAULT_DOUBLE_BUFFERING
       ENABLE_COMPRESSION = searchParams.has("enableCompression")

@@ -51,7 +51,8 @@ class ClipboardHandler(private val onCopyFailed: (ClientNotificationEvent) -> Un
         }
     }
     else {
-      fallbackCopy(text, "Clipboard API is not available")
+      //fallbackCopy(text, "Clipboard API is not available")
+      fallbackCopy(text, "剪贴板 API 无法使用")
     }
   }
 
@@ -101,12 +102,14 @@ class ClipboardHandler(private val onCopyFailed: (ClientNotificationEvent) -> Un
   }
 
   private fun askUserToCopyClipboardManually(textToCopy: String, vararg reasons: String) {
-    val message = "A clipboard change on the server detected but can't synchronize your clipboard with it automatically " +
-                  "(reasons: ${reasons.joinToString("; ")}). Please copy text on next line manually:"
+    //val message = "A clipboard change on the server detected but can't synchronize your clipboard with it automatically " +
+    //              "(reasons: ${reasons.joinToString("; ")}). Please copy text on next line manually:"
+    val message = "服务器上检测到剪贴板更改，但无法自动将您的剪贴板与之同步" +
+                  "(原因: ${reasons.joinToString("; ")}). 请手动复制文本:"              
 
     if (isElectron()) { // TODO window.prompt is not available in electron
-      val title = "Copying failed"
-      val notificationMessage = "Copying is not currently supported in insecure context in Projector launcher"
+      val title = "复制失败" //"Copying failed"
+      val notificationMessage = "在不安全(非HTTPS)的环境中不支持复制操作" //"Copying is not currently supported in insecure context in Projector launcher"
       val type = ClientNotificationType.ERROR
       onCopyFailed(ClientNotificationEvent(title, notificationMessage, type))
     }

@@ -63,7 +63,8 @@ object OnScreenMessenger : LafListener {
   }
 
   private val reload = (document.createElement("div") as HTMLDivElement).apply {
-    innerHTML = "<p>If you wish, you can try to <a onclick='location.reload();' href=''>reconnect</a>.</p>"
+    //innerHTML = "<p>If you wish, you can try to <a onclick='location.reload();' href=''>reconnect</a>.</p>"
+    innerHTML = "<p>如果您愿意，您可以尝试 <a onclick='location.reload();' href=''>重新连接</a>.</p>"
 
     div.appendChild(this)
   }

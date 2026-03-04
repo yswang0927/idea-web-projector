@@ -1,25 +1,6 @@
 /*
  * Copyright (c) 2019-2023, JetBrains s.r.o. and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
- *
- * This code is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation. JetBrains designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
- *
- * This code is distributed in the hope that it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License
- * version 2 for more details (a copy is included in the LICENSE file that
- * accompanied this code).
- *
- * You should have received a copy of the GNU General Public License version
- * 2 along with this work; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
- *
- * Please contact JetBrains, Na Hrebenech II 1718/10, Prague, 14000, Czech Republic
- * if you need additional information or have any questions.
  */
 @file:Suppress("JAVA_MODULE_DOES_NOT_EXPORT_PACKAGE")
 
@@ -28,6 +9,8 @@ package org.jetbrains.projector.server
 import com.intellij.notification.Notification
 import com.intellij.notification.NotificationType
 import com.intellij.notification.Notifications
+import com.intellij.ide.impl.*
+import com.intellij.openapi.application.*
 import org.jetbrains.projector.awt.PClipboard
 import org.jetbrains.projector.awt.PToolkitBase
 import org.jetbrains.projector.awt.PWindow
@@ -86,6 +69,7 @@ import java.net.InetAddress
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentLinkedQueue
+import java.nio.file.*
 import javax.swing.SwingUtilities
 import kotlin.concurrent.thread
 import kotlin.math.roundToLong
@@ -516,6 +500,96 @@ class ProjectorServer private constructor(
         val notification = Notification("ProjectorClient", message.title, message.message, intellijNotificationType)
         Notifications.Bus.notify(notification)
       }
+      
+      // yswang add 接收到客户端发送的打开项目指令
+      is ClientOpenProjectEvent -> {
+        val path = message.projectPath
+        logger.info { ">> Received request from client to open project: $path" }
+        // 使用 IntelliJ 平台的 Application 实例
+        val application = ApplicationManager.getApplication()
+        application.invokeLater({
+          try {
+            val projectDir = Paths.get(path).toAbsolutePath().normalize()
+
+            // 是否打开的是同一个项目
+            var existingProject = ProjectUtil.findAndFocusExistingProjectForPath(projectDir)
+            if (existingProject != null) {
+              //logger.info { ">> Projector: Project is already open, skipping: ${existingProject.getName()}" }
+              return@invokeLater // 在 lambda 中使用 return@invokeLater
+            }
+
+            // 自动信任
+            val trustedPaths = TrustedPaths.getInstance()
+            val parentDir = projectDir.parent
+            if (parentDir != null) {
+              val trustedState = trustedPaths.getProjectPathTrustedState(parentDir)
+              if (trustedState != com.intellij.util.ThreeState.YES) {
+                trustedPaths.setProjectPathTrusted(parentDir, true)
+                logger.info { ">> Projector: Trusted parent directory: $parentDir" }
+              }
+            } else {
+              // 如果没有父目录（极少见），则只信任项目本身
+              trustedPaths.setProjectPathTrusted(projectDir, true)
+            }
+
+            // 使用 2021 版 ProjectUtil.openOrImport 的正确重载
+            // https://github.com/JetBrains/intellij-community/blob/idea/221.6008.13/platform/platform-impl/src/com/intellij/ide/impl/ProjectUtil.java
+            val openedProjects = ProjectUtil.getOpenProjects()
+            // 寻找需要关闭的项目（通常是第一个）
+            val projectToClose = if (openedProjects.isNotEmpty()) openedProjects[0] else null
+            // openOrImport(java.nio.file.Path path, Project projectToClose, boolean forceOpenInNewFrame) 
+            val openedProject = ProjectUtil.openOrImport(projectDir, projectToClose, false)
+            if (openedProject != null) {
+              logger.info { ">> Projector: Successfully opened project: $path" }
+            } else {
+              logger.info { ">> Projector: Project opening was cancelled or failed: $path" }
+            }
+
+          } catch (e: Exception) {
+            logger.error(e) { ">> Projector: Error opening project: $path" }
+          }
+        }, ModalityState.defaultModalityState())
+      }
+
+      // yswang add 接收到打开文件的指令
+      is ClientOpenFileEvent -> {
+        val filePath = message.filePath
+        val line = message.line
+        logger.info { ">> Projector: Received request to open file: $filePath" }
+
+        ApplicationManager.getApplication().invokeLater({
+          try {
+            val openedProjects = ProjectUtil.getOpenProjects()
+            val project = if (openedProjects.isNotEmpty()) openedProjects[0] else null
+            if (project == null) {
+              logger.info { ">> Projector: No project opened. Cannot open file: $filePath" }
+              return@invokeLater
+            }
+
+            val ioPath = Paths.get(filePath).toAbsolutePath().normalize()
+            val virtualFile = com.intellij.openapi.vfs.LocalFileSystem.getInstance().refreshAndFindFileByPath(ioPath.toString())
+            if (virtualFile == null) {
+              logger.info { ">> Projector: File not found: $filePath" }
+              return@invokeLater
+            }
+
+            // 有行号就跳转，没有就直接打开
+            val descriptor = if (line > 0) {
+              com.intellij.openapi.fileEditor.OpenFileDescriptor(project, virtualFile, line - 1, 0)
+            } else {
+              com.intellij.openapi.fileEditor.OpenFileDescriptor(project, virtualFile)
+            }
+            if (descriptor.canNavigate()) {
+              descriptor.navigate(true)
+            }
+
+            logger.info { ">> Projector: Successfully opened file: $filePath" }
+          } catch (e: Exception) {
+            logger.error(e) { ">> Projector: Error opening file: $filePath" }
+          }
+        }, ModalityState.defaultModalityState())
+      }
+
     }
   }
 

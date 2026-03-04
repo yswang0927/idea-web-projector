@@ -131,13 +131,20 @@ sealed class ClientState {
       OnScreenMessenger.showText("Starting connection", "Waiting for response from $url...", canReload = false)
 
       if (!(window.asDynamic().isSecureContext as Boolean) && ParamsProvider.SHOW_NOT_SECURE_WARNING) {
-        window.alert(buildString {
+        /*window.alert(buildString {
           append("Warning: You have opened this page in a not secure context. ")
           append("This means that the browser will restrict usage of some features such as the clipboard access. ")
           append("You can find the full list here: ")
           append("https://developer.mozilla.org/en-US/docs/Web/Security/Secure_Contexts/features_restricted_to_secure_contexts. ")
           appendLine("To make the context secure, please use HTTPS for the web page or host it locally.")
           append("To disable this warning, please add `notSecureWarning=false` query parameter.")
+        })*/
+
+        window.alert(buildString {
+          append("警告：您正在非安全环境中打开此页面。")
+          append("这意味着浏览器将限制某些功能的使用，比如剪贴板访问功能。")
+          appendLine("为确保环境安全，请为网页使用 HTTPS 协议，或者将其本地化部署。")
+          append("若要禁用此警告，请添加 `notSecureWarning=false` 查询参数。")
         })
       }
 
@@ -174,7 +181,8 @@ sealed class ClientState {
 
     override fun consume(action: ClientAction) = when (action) {
       is ClientAction.WebSocket.Open -> {
-        OnScreenMessenger.showText("Connection is opened", "Sending handshake...", canReload = false)
+        //OnScreenMessenger.showText("Connection is opened", "Sending handshake...", canReload = false)
+        OnScreenMessenger.showText("连接已打开", "正在发送握手信号...", canReload = false)
 
         ClientStats.resetStats(action.openingTimeStamp.toDouble())
 
@@ -195,7 +203,8 @@ sealed class ClientState {
         webSocket.send("$HANDSHAKE_VERSION;${handshakeVersionList.indexOf(HANDSHAKE_VERSION)}")
         webSocket.send(KotlinxJsonToServerHandshakeEncoder.encode(handshakeEvent))
 
-        OnScreenMessenger.showText("Connection is opened", "Handshake is sent...", canReload = false)
+        //OnScreenMessenger.showText("Connection is opened", "Handshake is sent...", canReload = false)
+        OnScreenMessenger.showText("连接已打开", "握手信号已发出...", canReload = false)
 
         WaitingHandshakeReply(
           stateMachine = stateMachine,
@@ -233,7 +242,8 @@ sealed class ClientState {
 
         Do exhaustive when (command) {
           is ToClientHandshakeFailureEvent -> {
-            OnScreenMessenger.showText("Handshake failure", "Reason: ${command.reason}", canReload = true)
+            //OnScreenMessenger.showText("Handshake failure", "Reason: ${command.reason}", canReload = true)
+            OnScreenMessenger.showText("握手失败", "原因: ${command.reason}", canReload = true)
             webSocket.close()
             onHandshakeFinish()
 
@@ -245,9 +255,14 @@ sealed class ClientState {
 
             FontFaceAppender.removeAppendedFonts()
 
-            OnScreenMessenger.showText(
+            /*OnScreenMessenger.showText(
               "Loading fonts...",
               "0 of ${command.fontDataHolders.size} font(s) loaded",
+              canReload = false
+            )*/
+            OnScreenMessenger.showText(
+              "加载字体...",
+              "0 / ${command.fontDataHolders.size} 字体已加载",
               canReload = false
             )
 
@@ -260,9 +275,14 @@ sealed class ClientState {
                   stateMachine.fire(ClientAction.LoadAllFonts)
                 }
                 else {
-                  OnScreenMessenger.showText(
+                  /*OnScreenMessenger.showText(
                     "Loading fonts",
                     "$loadedFontCount of ${command.fontDataHolders.size} font(s) loaded.",
+                    canReload = false
+                  )*/
+                  OnScreenMessenger.showText(
+                    "加载字体",
+                    "$loadedFontCount / ${command.fontDataHolders.size} 字体已加载",
                     canReload = false
                   )
                 }
@@ -568,12 +588,14 @@ sealed class ClientState {
             Disconnected
           }
 
-          false -> reloadConnection("Connection is closed unexpectedly, retrying the connection...")
+          //false -> reloadConnection("Connection is closed unexpectedly, retrying the connection...")
+          false -> reloadConnection("连接意外断开，正在重新尝试连接...")
         }
       }
 
       is ClientAction.WebSocket.NoReplies ->
-        reloadConnection("No messages from server for ${action.elapsedTimeMs} ms, retrying the connection...")
+        reloadConnection("在 ${action.elapsedTimeMs} 毫秒内未收到服务器的消息，正在重试连接...")
+        //reloadConnection("No messages from server for ${action.elapsedTimeMs} ms, retrying the connection...")
 
       else -> super.consume(action)
     }
@@ -613,9 +635,10 @@ sealed class ClientState {
       get() = this.wasClean && this.code in setOf(NORMAL_CLOSURE_STATUS_CODE, GOING_AWAY_STATUS_CODE)
 
     private fun showDisconnectedMessage(url: String, action: ClientAction.WebSocket.Close) {
-      val reason = action.reason.ifBlank { null }?.let { "Reason: $it" } ?: "The server hasn't reported a reason of the disconnection."
+      //val reason = action.reason.ifBlank { null }?.let { "Reason: $it" } ?: "The server hasn't reported a reason of the disconnection."
+      val reason = action.reason.ifBlank { null }?.let { "原因: $it" } ?: "服务器尚未报告此次断开连接的原因."
 
-      Do exhaustive when (action.endedNormally) {
+      /*Do exhaustive when (action.endedNormally) {
         true -> OnScreenMessenger.showText(
           "Disconnected",
           "It seems that your connection is ended normally. $reason",
@@ -630,7 +653,25 @@ sealed class ClientState {
           "CloseEvent.wasClean=${action.wasClean}. $reason",
           canReload = true
         )
+      }*/
+
+      Do exhaustive when (action.endedNormally) {
+        true -> OnScreenMessenger.showText(
+          "连接断开",
+          "似乎您的连接已正常断开. $reason",
+          canReload = true
+        )
+
+        false -> OnScreenMessenger.showText(
+          "连接问题",
+          "无法连接到 $url." +
+          "浏览器控制台中可能会出现错误信息以及更详细的描述. " +
+          "我们所知道的一切是: CloseEvent.code=${action.code}, " +
+          "CloseEvent.wasClean=${action.wasClean}. $reason",
+          canReload = true
+        )
       }
+
     }
 
     private fun createWebSocketConnection(url: String, stateMachine: ClientStateMachine): WebSocket {
