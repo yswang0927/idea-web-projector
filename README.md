@@ -51,7 +51,7 @@ idea-2021.3.3
 ## 4. 定制修改的地方
 
 - `projector-client/projector-client-common/src/jsMain/kotlin/org/jetbrains/projector/client/common/misc/ParamsProvider.kt`
-```
+```kotlin
 // yswang 声明新变量
 val PROJECT_PATH: String? 
 val FILE_PATH: String?
@@ -64,7 +64,7 @@ FILE_LINE = searchParams.get("lineNumber")?.toIntOrNull() ?: 0
 ```
 
 - `projector-client/projector-common/src/commonMain/kotlin/org/jetbrains/projector/common/protocol/toServer/ClientEvent.kt`
-```
+```kotlin
 // 新增自定义 websocket 指令
 // yswang add 添加一个打开项目的事件
 @Serializable
@@ -80,7 +80,7 @@ data class ClientOpenFileEvent(
 ```
 
 - `projector-server/projector-server-common/src/main/kotlin/org/jetbrains/projector/server/ProjectorServer.kt`
-```
+```kotlin
 import com.intellij.ide.impl.*
 import com.intellij.openapi.application.*
 
@@ -175,7 +175,7 @@ is ClientOpenFileEvent -> {
 ```
 
 - `projector-client/projector-client-web/src/main/kotlin/org/jetbrains/projector/client/web/window/WebWindowManager.kt`
-```
+```kotlin
 init {
     window.onblur = ::onDeactivated
     window.onfocus = ::onActivated
