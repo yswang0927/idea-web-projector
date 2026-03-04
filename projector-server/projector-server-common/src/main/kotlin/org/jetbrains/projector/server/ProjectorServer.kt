@@ -604,7 +604,7 @@ class ProjectorServer private constructor(
           if (lookFeel != null) {
             lafManager.setCurrentLookAndFeel(lookFeel)
             lafManager.updateUI()
-            logger.info { ">> Projector: Theme changed to $themeName" }
+            logger.info { ">> Projector: Theme changed to ${lookFeel.name}" }
           }
         }, ModalityState.NON_MODAL)
       }
