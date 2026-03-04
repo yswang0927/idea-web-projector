@@ -48,42 +48,54 @@
           );
     }
   </script>
-    <script>
-        // iframe 内部接收
-        window.addEventListener('message', (event) => {
-            // {'action':'openProject', 'value': '/path'}
-            // {'action':'openFile', 'value': '/path/file'}
-            const msg = event.data;
-            if (typeof msg !== 'object' || msg === null) return;
-            const action = msg.action || 'unknown';
-            const value = msg.value || '';
-            switch (action) {
-                // 打开项目
-                case 'openProject':
-                    if (value && typeof value === 'string') {
-                        window.projectorOpenProject(value);
-                    }
-                    break;
-                // 打开文件,支持行号: /A.java#L10
-                case 'openFile':
-                    if (value && typeof value === 'string') {
-                        let filePath = value;
-                        let lineNo = 0;
-                        const lineIndex = value.indexOf('#L');
-                        if (lineIndex != -1) {
-                            filePath = value.substring(0, lineIndex);
-                            lineNo = parseInt(value.substring(lineIndex + 2)) || 0;
-                        }
-                        if (filePath) {
-                            window.projectorOpenFile(filePath, Math.max(0, lineNo));
-                        }
-                    }
-                    break;
-                default:
-                    console.error('>> 无效的命令: ', msg);
+
+  <script>
+    // iframe 内部接收
+    const params = new URLSearchParams(window.location.search);
+    const projectPath = params.get('projectPath') || '';
+
+    window.addEventListener('message', (event) => {
+      // {'action':'openProject', 'value': '/path'}
+      // {'action':'openFile', 'value': '/path/file'}
+      const msg = event.data;
+      if (typeof msg !== 'object' || msg === null) return;
+      const action = msg.action || 'unknown';
+      const value = msg.value || '';
+      switch (action) {
+        // 打开项目
+        case 'openProject':
+          if (value && typeof value === 'string') {
+            window.projectorOpenProject(value);
+          }
+          break;
+        // 打开文件,支持行号: /A.java#L10
+        case 'openFile':
+          if (value && typeof value === 'string') {
+            let filePath = value;
+            let lineNo = 0;
+            const lineIndex = value.indexOf('#L');
+            if (lineIndex != -1) {
+              filePath = value.substring(0, lineIndex);
+              lineNo = parseInt(value.substring(lineIndex + 2)) || 0;
             }
-        });
-    </script>
+            if (filePath) {
+              // 相对路径, 需要拼接上项目路径
+              if (filePath.charAt(0) != '/') {
+                if (!projectPath) {
+                  console.warn('>> 无项目路径, 无法打开相对路径文件: '+ filePath);
+                  return;
+                }
+                filePath = projectPath + (projectPath.charAt(projectPath.length - 1) != '/' ? '/' : '') + filePath;
+              }
+              window.projectorOpenFile(filePath, Math.max(0, lineNo));
+            }
+          }
+          break;
+        default:
+          console.error('>> 无效的命令: ', msg);
+      }
+    });
+  </script>
 </head>
 
 <body onload="onLoad()">
