@@ -590,6 +590,25 @@ class ProjectorServer private constructor(
         }, ModalityState.defaultModalityState())
       }
 
+      // 切换主题
+      is ClientChangeThemeEvent -> {
+        val themeName = when {
+          message.theme.equals("dark", ignoreCase = true) -> "Darcula"
+          message.theme.equals("light", ignoreCase = true) -> "IntelliJ Light"
+          else -> message.theme  // 支持直接传主题原名
+        }
+
+        ApplicationManager.getApplication().invokeLater({
+          val lafManager = com.intellij.ide.ui.LafManager.getInstance()
+          val lookFeel = lafManager.installedLookAndFeels.find { it.name.contains(themeName, ignoreCase = true) }
+          if (lookFeel != null) {
+            lafManager.setCurrentLookAndFeel(lookFeel)
+            lafManager.updateUI()
+            logger.info { ">> Projector: Theme changed to $themeName" }
+          }
+        }, ModalityState.NON_MODAL)
+      }
+
     }
   }
 

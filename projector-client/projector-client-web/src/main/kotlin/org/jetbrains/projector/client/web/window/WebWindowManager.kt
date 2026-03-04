@@ -13,6 +13,7 @@ import org.jetbrains.projector.common.protocol.toServer.ClientWindowsDeactivatio
 import org.jetbrains.projector.client.common.misc.ParamsProvider
 import org.jetbrains.projector.common.protocol.toServer.ClientOpenProjectEvent
 import org.jetbrains.projector.common.protocol.toServer.ClientOpenFileEvent
+import org.jetbrains.projector.common.protocol.toServer.ClientChangeThemeEvent
 
 import org.w3c.dom.HTMLCanvasElement
 import org.w3c.dom.events.FocusEvent
@@ -32,10 +33,12 @@ class WebWindowManager(private val stateMachine: ClientStateMachine, override va
     // 这样你在浏览器控制台输入 window.projectorOpenProject(...) 就能调用
     (window.asDynamic()).projectorOpenProject = ::openProject
     (window.asDynamic()).projectorOpenFile = ::openFile
+    (window.asDynamic()).projectorChangeTheme = ::changeTheme
 
     // 检查 URL 参数启动参数
     ParamsProvider.PROJECT_PATH?.let { openProject(it) }
     ParamsProvider.FILE_PATH?.let { openFile(it, ParamsProvider.FILE_LINE ?: 0) }
+    ParamsProvider.THEME?.let { changeTheme(it) }
     // ----------------
   }
 
@@ -121,6 +124,14 @@ class WebWindowManager(private val stateMachine: ClientStateMachine, override va
       line = line
     )))
     console.log(">> Projector: Requesting to open file: $path at line: $line")
+  }
+
+  /**
+   * 切换主题
+   */
+  fun changeTheme(themeName: String) {
+    if (themeName == null || themeName.isBlank()) return
+    stateMachine.fire(ClientAction.AddEvent(ClientChangeThemeEvent(theme = themeName)))
   }
   
 }

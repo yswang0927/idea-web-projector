@@ -1,26 +1,3 @@
-/*
- * MIT License
- *
- * Copyright (c) 2019-2023 JetBrains s.r.o.
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
 package org.jetbrains.projector.client.common.misc
 
 import kotlinx.browser.window
@@ -81,9 +58,11 @@ actual object ParamsProvider {
   val PORT: String
   val PATH: String
 
-  val PROJECT_PATH: String? // yswang 声明新变量
-  val FILE_PATH: String? // yswang 声明新变量
-  val FILE_LINE: Int? // yswang 声明新变量
+  // yswang 声明新变量
+  val PROJECT_PATH: String?
+  val FILE_PATH: String? 
+  val FILE_LINE: Int?
+  val THEME: String?
 
   val RELAY_SERVER_ID: String?
   val ENABLE_RELAY: Boolean get() = RELAY_SERVER_ID != null
@@ -122,10 +101,12 @@ actual object ParamsProvider {
       HOST = searchParams.get("host") ?: DEFAULT_HOST
       PORT = searchParams.get("port") ?: if (ENABLE_RELAY) protocolPort() else DEFAULT_PORT
       PATH = searchParams.get("path") ?: DEFAULT_PATH
+
       // yswang add 接收要打开的项目路径
       PROJECT_PATH = searchParams.get("projectPath") ?: DEFAULT_PROJECT_PATH
       FILE_PATH = searchParams.get("filePath") ?: ""
       FILE_LINE = searchParams.get("lineNumber")?.toIntOrNull() ?: 0
+      THEME = searchParams.get("theme") ?: ""
 
       LOG_UNSUPPORTED_EVENTS = searchParams.has("logUnsupportedEvents")
       DOUBLE_BUFFERING = searchParams.get("doubleBuffering")?.toBoolean() ?: DEFAULT_DOUBLE_BUFFERING

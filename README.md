@@ -56,11 +56,13 @@ idea-2021.3.3
 val PROJECT_PATH: String? 
 val FILE_PATH: String?
 val FILE_LINE: Int?
+val THEME: String?
 
 // yswang add 接收要打开的项目路径和文件路径(:8887?projectPath=&filePath=&lineNumber=)
 PROJECT_PATH = searchParams.get("projectPath") ?: DEFAULT_PROJECT_PATH
 FILE_PATH = searchParams.get("filePath") ?: ""
 FILE_LINE = searchParams.get("lineNumber")?.toIntOrNull() ?: 0
+THEME = searchParams.get("theme") ?: ""
 ```
 
 - `projector-client/projector-common/src/commonMain/kotlin/org/jetbrains/projector/common/protocol/toServer/ClientEvent.kt`
@@ -76,6 +78,11 @@ data class ClientOpenProjectEvent(
 data class ClientOpenFileEvent(
   val filePath: String,
   val line: Int = 0 // 可选：指定跳转行号
+) : ClientEvent()
+
+@Serializable
+data class ClientChangeThemeEvent(
+  val theme: String,
 ) : ClientEvent()
 ```
 
@@ -172,6 +179,25 @@ is ClientOpenFileEvent -> {
       }
     }, ModalityState.defaultModalityState())
 }
+
+// 切换主题
+is ClientChangeThemeEvent -> {
+  val themeName = when {
+    message.theme.equals("dark", ignoreCase = true) -> "Darcula"
+    message.theme.equals("light", ignoreCase = true) -> "IntelliJ Light"
+    else -> message.theme  // 支持直接传主题原名
+  }
+
+  ApplicationManager.getApplication().invokeLater({
+    val lafManager = com.intellij.ide.ui.LafManager.getInstance()
+    val lookFeel = lafManager.installedLookAndFeels.find { it.name.contains(themeName, ignoreCase = true) }
+    if (lookFeel != null) {
+      lafManager.setCurrentLookAndFeel(lookFeel)
+      lafManager.updateUI()
+      logger.info { ">> Projector: Theme changed to $themeName" }
+    }
+  }, ModalityState.NON_MODAL)
+}
 ```
 
 - `projector-client/projector-client-web/src/main/kotlin/org/jetbrains/projector/client/web/window/WebWindowManager.kt`
@@ -185,10 +211,12 @@ init {
     // 这样你在浏览器控制台输入 window.projectorOpenProject(...) 就能调用
     (window.asDynamic()).projectorOpenProject = ::openProject
     (window.asDynamic()).projectorOpenFile = ::openFile
+    (window.asDynamic()).projectorChangeTheme = ::changeTheme
 
     // 检查 URL 参数启动参数
     ParamsProvider.PROJECT_PATH?.let { openProject(it) }
     ParamsProvider.FILE_PATH?.let { openFile(it, ParamsProvider.FILE_LINE ?: 0) }
+    ParamsProvider.THEME?.let { changeTheme(it) }
     // ----------------
 }
 
@@ -214,5 +242,13 @@ fun openFile(path: String, line: Int = 0) {
       line = line
     )))
     console.log(">> Projector: Requesting to open file: $path at line: $line")
+}
+
+/**
+ * 切换主题
+ */
+fun changeTheme(themeName: String) {
+  if (themeName == null || themeName.isBlank()) return
+  stateMachine.fire(ClientAction.AddEvent(ClientChangeThemeEvent(theme = themeName)))
 }
 ```

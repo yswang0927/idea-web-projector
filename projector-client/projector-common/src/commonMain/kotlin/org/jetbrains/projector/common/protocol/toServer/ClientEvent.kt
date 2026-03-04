@@ -251,3 +251,8 @@ data class ClientOpenFileEvent(
   val filePath: String,
   val line: Int = 0 // 可选：指定跳转行号
 ) : ClientEvent()
+
+@Serializable
+data class ClientChangeThemeEvent(
+  val theme: String,
+) : ClientEvent()
