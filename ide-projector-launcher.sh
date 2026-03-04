@@ -4,6 +4,23 @@
 
 THIS_FILE_NAME=$(basename "$0")
 
+# --- 1. 参数解析逻辑 (新增) ---
+# 默认端口号
+port=8887
+
+for i in "$@"; do
+  case $i in
+    --port=*)
+      port="${i#*=}"
+      shift # 从参数列表中移除 --port
+      ;;
+    *)
+      # 其他参数保留给 IDE
+      ;;
+  esac
+done
+# ----------------------------
+
 ideRunnerCandidates=($(grep -lr --include=*.sh "com.intellij.idea.Main\|jetbrains.mps.Launcher" .))
 
 # remove this file from candidates:
@@ -29,8 +46,6 @@ IDE_RUN_FILE_NAME=${ideRunnerWithoutPrefix/".sh"/""}
 echo "Found IDE: $IDE_RUN_FILE_NAME"
 
 cp "$IDE_RUN_FILE_NAME.sh" "$IDE_RUN_FILE_NAME-projector.sh"
-
-port=8887
 
 # change
 # classpath "$CLASSPATH"
