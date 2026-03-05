@@ -83,11 +83,17 @@ class CaretInfoUpdater(private val onCaretInfoChanged: (ServerCaretInfoChangedEv
       null
     } ?: return null
 
-    return readAction { dataContext.getData(CommonDataKeys.EDITOR) } as? EditorImpl
+    // yswang IDEA-2021.3.x 后更严格了
+    //return readAction { dataContext.getData(CommonDataKeys.EDITOR) } as? EditorImpl
+    // 将 readAction 替换为 invokeAndWaitIfNeeded，强制在 EDT 中获取 DataContext 数据
+    return invokeAndWaitIfNeeded { 
+      dataContext.getData(CommonDataKeys.EDITOR) as? EditorImpl 
+    }
   }
 
+  // yswang 根据 gemini 建议,全量替换新的实现
+  /*
   private fun loadCaretInfo(): ServerCaretInfoChangedEvent.CaretInfoChange {
-
     val focusedEditor = getCurrentEditorImpl() ?: return ServerCaretInfoChangedEvent.CaretInfoChange.NoCarets
     val focusedEditorComponent = focusedEditor.contentComponent
 
@@ -160,6 +166,88 @@ class CaretInfoUpdater(private val onCaretInfoChanged: (ServerCaretInfoChangedEv
         )
       }
     }
+  }*/
+
+  // yswang gemini 输出的修改
+  private fun loadCaretInfo(): ServerCaretInfoChangedEvent.CaretInfoChange {
+
+    val focusedEditor = getCurrentEditorImpl() ?: return ServerCaretInfoChangedEvent.CaretInfoChange.NoCarets
+
+    // yswang 将所有 UI 几何计算、AWT 组件遍历及 Editor 状态读取统一放入 EDT
+    return invokeAndWaitIfNeeded {
+      val focusedEditorComponent = focusedEditor.contentComponent
+
+      if (!focusedEditorComponent.isShowing) return@invokeAndWaitIfNeeded ServerCaretInfoChangedEvent.CaretInfoChange.NoCarets
+
+      val componentLocation = focusedEditorComponent.locationOnScreen
+      val scrollPane = focusedEditor.scrollPane
+      val visibleEditorRect = scrollPane.viewport.viewRect
+
+      val lineHeight = focusedEditor.lineHeight
+      val lineAscent = focusedEditor.ascent
+
+      var rootComponent: Component? = focusedEditorComponent
+      var editorPWindow: PWindow? = null
+
+      while (rootComponent != null) {
+        val peer = AWTAccessor.getComponentAccessor().getPeer<ComponentPeer>(rootComponent)
+
+        if (peer is PComponentPeerBase) {
+          editorPWindow = peer.pWindow
+          break
+        }
+
+        rootComponent = rootComponent.parent
+      }
+
+      when (editorPWindow) {
+        null -> ServerCaretInfoChangedEvent.CaretInfoChange.NoCarets
+
+        else -> {
+          val rootComponentLocation = rootComponent!!.locationOnScreen
+
+          val editorLocationInWindowX = componentLocation.x - rootComponentLocation.x
+          val editorLocationInWindowY = componentLocation.y - rootComponentLocation.y
+
+          val points = focusedEditor.caretModel.allCarets.map {
+            // 此时已在 EDT 块内，直接调用即可，无需再嵌套 invokeAndWaitIfNeeded
+            val caretLocationInEditor = it.editor.visualPositionToXY(it.visualPosition)
+
+            val point = Point(
+              x = (editorLocationInWindowX + caretLocationInEditor.x).toDouble(),
+              y = (editorLocationInWindowY + caretLocationInEditor.y).toDouble(),
+            )
+
+            CaretInfo(point)
+          }
+
+          val isVerticalScrollBarVisible = visibleEditorRect.height < focusedEditorComponent.height
+          val verticalScrollBarWidth = if (isVerticalScrollBarVisible) scrollPane.verticalScrollBar?.width ?: 0 else 0
+
+          val textColor = getTextColorBeforeCaret(focusedEditor)
+          val editorFont = getFontBeforeCaret(focusedEditor)
+          val backgroundColor = getBackgroundBeforeCaret(focusedEditor)
+
+          ServerCaretInfoChangedEvent.CaretInfoChange.Carets(
+            points,
+            fontId = FontCacher.getId(editorFont),
+            fontSize = editorFont.size,
+            editorWindowId = editorPWindow.id,
+            editorMetrics = CommonRectangle(
+              x = componentLocation.getX() - rootComponentLocation.x + visibleEditorRect.x,
+              y = componentLocation.getY() - rootComponentLocation.y + visibleEditorRect.y,
+              width = visibleEditorRect.width.toDouble(),
+              height = visibleEditorRect.height.toDouble()
+            ),
+            lineHeight = lineHeight,
+            lineAscent = lineAscent,
+            verticalScrollBarWidth = verticalScrollBarWidth,
+            textColor = textColor,
+            backgroundColor = backgroundColor,
+          )
+        }
+      }
+    }
   }
 
   private fun getTextColorBeforeCaret(editor: EditorEx): Int {
@@ -199,7 +287,9 @@ class CaretInfoUpdater(private val onCaretInfoChanged: (ServerCaretInfoChangedEv
     filter: (TextAttributes) -> Boolean
   ): TextAttributes? {
 
-    val caretOffset = readAction { editor.caretModel.offset }
+    // yswang 这个地方目前没有触发异常, gemini提示了可以修改下
+    //val caretOffset = readAction { editor.caretModel.offset }
+    val caretOffset = invokeAndWaitIfNeeded { editor.caretModel.offset }
 
     if (caretOffset <= 0) return null
 
@@ -251,6 +341,7 @@ class CaretInfoUpdater(private val onCaretInfoChanged: (ServerCaretInfoChangedEv
 
     val startPos = caretOffset - 1
 
+    /* yswang 这里没有触发异常,但是gemini建议更新使用invokeAndWaitIfNeeded
     val highlightIterator = readAction { editor.highlighter.createIterator(startPos) }
     if (highlightIterator.atEnd()) return
 
@@ -261,6 +352,20 @@ class CaretInfoUpdater(private val onCaretInfoChanged: (ServerCaretInfoChangedEv
 
       highlightIterator.advance()
     } while (!highlightIterator.atEnd() && startPos in highlightIterator.start until highlightIterator.end)
+    */
+    // 将整个迭代器遍历过程包裹在 EDT 中，防止并发修改文档导致崩溃
+    invokeAndWaitIfNeeded {
+      val highlightIterator = editor.highlighter.createIterator(startPos)
+      if (highlightIterator.atEnd()) return@invokeAndWaitIfNeeded
+
+      do {
+        val candidateAttrs = highlightIterator.textAttributes
+        val range = highlightIterator.start until highlightIterator.end
+        compareAndUpdate(ExtendedTextAttributes(candidateAttrs, range, -1))
+
+        highlightIterator.advance()
+      } while (!highlightIterator.atEnd() && startPos in highlightIterator.start until highlightIterator.end)
+    }
   }
 
   fun start() {
@@ -282,7 +387,8 @@ class CaretInfoUpdater(private val onCaretInfoChanged: (ServerCaretInfoChangedEv
               }
             }
 
-            Thread.sleep(10)
+            // yswang 轮询间隔从 10ms 提高到 30ms，大幅降低 EDT 阻塞与性能消耗
+            Thread.sleep(30)
           }
           catch (ex: InterruptedException) {
             Thread.currentThread().interrupt()

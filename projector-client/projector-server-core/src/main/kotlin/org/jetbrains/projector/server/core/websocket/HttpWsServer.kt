@@ -289,8 +289,18 @@ public abstract class HttpWsServer(host: InetAddress, port: Int) : HttpWsTranspo
   }
 
   override fun forEachOpenedConnection(action: (client: ClientWrapper) -> Unit) {
+    // yswang 修复 java.lang.ClassCastException: class org.jetbrains.projector.server.core.websocket.HttpWsServer$Companion$HTTP_CONNECTION_ATTACHMENT$1 
+    //  cannot be cast to class org.jetbrains.projector.server.core.ClientWrapper 错误
+    /* 
     webSocketServer.connections.filter(WebSocket::isOpen).forEach {
       val wrapper = it.getAttachment<ClientWrapper>() ?: return@forEachOpenedConnection
+      action(wrapper)
+    }*/
+    webSocketServer.connections.filter(WebSocket::isOpen).forEach {
+      // 先以 Any? 类型安全地获取附加对象，避免底层抛出转换异常
+      val attachment = it.getAttachment<Any?>()
+      // 使用 as? 进行安全的类型检查，如果不是 ClientWrapper 就会返回 null，从而安全跳过
+      val wrapper = attachment as? ClientWrapper ?: return@forEachOpenedConnection
       action(wrapper)
     }
   }

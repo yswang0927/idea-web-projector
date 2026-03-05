@@ -1,4 +1,4 @@
-# 在线 Web 版本IDEA
+# 在线 Web 版本IDEA(升级支持到2021.3)
 
 > 
 > 基于jetbrains开源的 `projector-server` 和 `projector-client` 进行定制修改.
@@ -90,6 +90,8 @@ data class ClientChangeThemeEvent(
 ```kotlin
 import com.intellij.ide.impl.*
 import com.intellij.openapi.application.*
+
+// 凡是修改的地方都有 yswang 标记
 
 // yswang add 接收到客户端发送的打开项目指令
 is ClientOpenProjectEvent -> {
@@ -250,5 +252,44 @@ fun openFile(path: String, line: Int = 0) {
 fun changeTheme(themeName: String) {
   if (themeName == null || themeName.isBlank()) return
   stateMachine.fire(ClientAction.AddEvent(ClientChangeThemeEvent(theme = themeName)))
+}
+```
+
+- `projector-server/projector-server-common/src/main/kotlin/org/jetbrains/projector/server/idea/CaretInfoUpdater.kt`
+```kotlin
+// 修改的地方都标记了 yswang
+private fun getCurrentEditorImpl(): EditorImpl? {
+  val dataContext = try {
+    myDataManager.dataContextFromFocusAsync.blockingGet(DATA_CONTEXT_QUERYING_TIMEOUT_MS)
+  } catch (e : TimeoutException) {
+    null
+  } ?: return null
+
+  // yswang IDEA-2021.3.x 后更严格了
+  //return readAction { dataContext.getData(CommonDataKeys.EDITOR) } as? EditorImpl
+  // 将 readAction 替换为 invokeAndWaitIfNeeded，强制在 EDT 中获取 DataContext 数据
+  return invokeAndWaitIfNeeded { 
+    dataContext.getData(CommonDataKeys.EDITOR) as? EditorImpl 
+  }
+}
+```
+
+- `projector-client/projector-server-core/src/main/kotlin/org/jetbrains/projector/server/core/websocket/HttpWsServer.kt`
+```kotlin
+override fun forEachOpenedConnection(action: (client: ClientWrapper) -> Unit) {
+  // yswang 修复 java.lang.ClassCastException: class org.jetbrains.projector.server.core.websocket.HttpWsServer$Companion$HTTP_CONNECTION_ATTACHMENT$1 
+  //  cannot be cast to class org.jetbrains.projector.server.core.ClientWrapper 错误
+  /* 
+  webSocketServer.connections.filter(WebSocket::isOpen).forEach {
+    val wrapper = it.getAttachment<ClientWrapper>() ?: return@forEachOpenedConnection
+    action(wrapper)
+  }*/
+  webSocketServer.connections.filter(WebSocket::isOpen).forEach {
+    // 先以 Any? 类型安全地获取附加对象，避免底层抛出转换异常
+    val attachment = it.getAttachment<Any?>()
+    // 使用 as? 进行安全的类型检查，如果不是 ClientWrapper 就会返回 null，从而安全跳过
+    val wrapper = attachment as? ClientWrapper ?: return@forEachOpenedConnection
+    action(wrapper)
+  }
 }
 ```

@@ -112,7 +112,8 @@ class ProjectorServer private constructor(
       commonQueue.add(ServerMarkdownEvent.ServerMarkdownResizeEvent(id, size.toCommonIntSize()))
     }
     PanelUpdater.moveCallback = { id, point ->
-      commonQueue.add(ServerMarkdownEvent.ServerMarkdownMoveEvent(id, point.shift(PGraphicsEnvironment.defaultDevice.clientShift)))
+      // yswang 修改：使用 safeClientShift
+      commonQueue.add(ServerMarkdownEvent.ServerMarkdownMoveEvent(id, point.shift(safeClientShift)))
     }
     PanelUpdater.disposeCallback = { id ->
       commonQueue.add(ServerMarkdownEvent.ServerMarkdownDisposeEvent(id))
@@ -285,7 +286,8 @@ class ProjectorServer private constructor(
           icons = window.icons?.map { it as ImageId },
           isShowing = window.target.isShowing,
           zOrder = i,
-          bounds = window.target.shiftBounds(PGraphicsEnvironment.defaultDevice.clientShift),
+          // yswang 修改：使用 safeClientShift
+          bounds = window.target.shiftBounds(safeClientShift),
           headerHeight = window.headerHeight,
           cursorType = window.cursor?.type?.toCursorType(),
           resizable = window.resizable,
@@ -342,7 +344,8 @@ class ProjectorServer private constructor(
       }
 
       is ClientMouseEvent -> SwingUtilities.invokeLater {
-        val shiftedMessage = message.shift(PGraphicsEnvironment.defaultDevice.clientShift)
+        // yswang 修改：使用 safeClientShift
+        val shiftedMessage = message.shift(safeClientShift)
 
         PMouseInfoPeer.lastMouseCoords.setLocation(shiftedMessage.x, shiftedMessage.y)
 
@@ -359,7 +362,8 @@ class ProjectorServer private constructor(
       }
 
       is ClientWheelEvent -> SwingUtilities.invokeLater {
-        val shiftedMessage = message.shift(PGraphicsEnvironment.defaultDevice.clientShift)
+        // yswang 修改：使用 safeClientShift
+        val shiftedMessage = message.shift(safeClientShift)
         PMouseInfoPeer.lastMouseCoords.setLocation(shiftedMessage.x, shiftedMessage.y)
 
         val window = PWindow.getWindow(message.windowId)?.target
@@ -895,6 +899,21 @@ class ProjectorServer private constructor(
   companion object {
 
     private val logger = Logger<ProjectorServer>()
+    
+    /*
+        yswang add：安全获取 clientShift 的属性
+        修复没有客户端连接时报的异常: 
+        ProjectorServer :: Unhandled in daemon thread has happened :: java.lang.IndexOutOfBoundsException: Index 0 out of bounds for length 0
+            at org.jetbrains.projector.awt.image.PGraphicsEnvironment$Companion.getDefaultDevice(PGraphicsEnvironment.kt:44)
+            at org.jetbrains.projector.server.ProjectorServer$Companion.calculateMainWindowShift(ProjectorServer.kt:948)
+            at org.jetbrains.projector.server.ProjectorServer$Companion.access$calculateMainWindowShift(ProjectorServer.kt:895)
+    */
+    private val safeClientShift: AwtPoint
+      get() = try {
+        PGraphicsEnvironment.defaultDevice.clientShift
+      } catch (e: IndexOutOfBoundsException) {
+        AwtPoint(0, 0)
+      }
 
     @JvmStatic
     val isEnabled: Boolean
@@ -924,7 +943,8 @@ class ProjectorServer private constructor(
 
     private fun calculateMainWindowShift() {
       if (PGraphicsEnvironment.clientDoesWindowManagement) {
-        PGraphicsEnvironment.defaultDevice.clientShift.setLocation(0, 0)
+        // yswang 修改：使用 safeClientShift
+        safeClientShift.setLocation(0, 0)
         return
       }
 
@@ -945,7 +965,8 @@ class ProjectorServer private constructor(
             y += it.y
           }
 
-          PGraphicsEnvironment.defaultDevice.clientShift.setLocation(x, y)
+          // yswang 修改：使用 safeClientShift
+          safeClientShift.setLocation(x, y)
         }
       }
     }
@@ -963,7 +984,8 @@ class ProjectorServer private constructor(
       getMainWindows().map(PWindow::target).let { mainWindows ->
         SwingUtilities.invokeLater {
           mainWindows.forEach {
-            val point = AwtPoint(PGraphicsEnvironment.defaultDevice.clientShift)
+            // yswang 修改：使用 safeClientShift
+            val point = AwtPoint(safeClientShift)
             var widthWithInsets = width
             var heightWithInsets = height
             if (it is Frame) {
