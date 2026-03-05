@@ -511,48 +511,53 @@ class ProjectorServer private constructor(
         logger.info { ">> Received request from client to open project: $path" }
         // 使用 IntelliJ 平台的 Application 实例
         val application = ApplicationManager.getApplication()
-        application.invokeLater({
-          try {
-            val projectDir = Paths.get(path).toAbsolutePath().normalize()
+        if (application != null) {
+          application.invokeLater({
+            try {
+              val projectDir = Paths.get(path).toAbsolutePath().normalize()
 
-            // 是否打开的是同一个项目
-            var existingProject = ProjectUtil.findAndFocusExistingProjectForPath(projectDir)
-            if (existingProject != null) {
-              //logger.info { ">> Projector: Project is already open, skipping: ${existingProject.getName()}" }
-              return@invokeLater // 在 lambda 中使用 return@invokeLater
-            }
-
-            // 自动信任
-            val trustedPaths = TrustedPaths.getInstance()
-            val parentDir = projectDir.parent
-            if (parentDir != null) {
-              val trustedState = trustedPaths.getProjectPathTrustedState(parentDir)
-              if (trustedState != com.intellij.util.ThreeState.YES) {
-                trustedPaths.setProjectPathTrusted(parentDir, true)
-                logger.info { ">> Projector: Trusted parent directory: $parentDir" }
+              // 是否打开的是同一个项目
+              var existingProject = ProjectUtil.findAndFocusExistingProjectForPath(projectDir)
+              if (existingProject != null) {
+                //logger.info { ">> Projector: Project is already open, skipping: ${existingProject.getName()}" }
+                return@invokeLater // 在 lambda 中使用 return@invokeLater
               }
-            } else {
-              // 如果没有父目录（极少见），则只信任项目本身
-              trustedPaths.setProjectPathTrusted(projectDir, true)
-            }
 
-            // 使用 2021 版 ProjectUtil.openOrImport 的正确重载
-            // https://github.com/JetBrains/intellij-community/blob/idea/221.6008.13/platform/platform-impl/src/com/intellij/ide/impl/ProjectUtil.java
-            val openedProjects = ProjectUtil.getOpenProjects()
-            // 寻找需要关闭的项目（通常是第一个）
-            val projectToClose = if (openedProjects.isNotEmpty()) openedProjects[0] else null
-            // openOrImport(java.nio.file.Path path, Project projectToClose, boolean forceOpenInNewFrame) 
-            val openedProject = ProjectUtil.openOrImport(projectDir, projectToClose, false)
-            if (openedProject != null) {
-              logger.info { ">> Projector: Successfully opened project: $path" }
-            } else {
-              logger.info { ">> Projector: Project opening was cancelled or failed: $path" }
-            }
+              // 自动信任
+              val trustedPaths = TrustedPaths.getInstance()
+              val parentDir = projectDir.parent
+              if (parentDir != null) {
+                val trustedState = trustedPaths.getProjectPathTrustedState(parentDir)
+                if (trustedState != com.intellij.util.ThreeState.YES) {
+                  trustedPaths.setProjectPathTrusted(parentDir, true)
+                  logger.info { ">> Projector: Trusted parent directory: $parentDir" }
+                }
+              } else {
+                // 如果没有父目录（极少见），则只信任项目本身
+                trustedPaths.setProjectPathTrusted(projectDir, true)
+              }
 
-          } catch (e: Exception) {
-            logger.error(e) { ">> Projector: Error opening project: $path" }
-          }
-        }, ModalityState.defaultModalityState())
+              // 使用 2021 版 ProjectUtil.openOrImport 的正确重载
+              // https://github.com/JetBrains/intellij-community/blob/idea/221.6008.13/platform/platform-impl/src/com/intellij/ide/impl/ProjectUtil.java
+              val openedProjects = ProjectUtil.getOpenProjects()
+              // 寻找需要关闭的项目（通常是第一个）
+              val projectToClose = if (openedProjects.isNotEmpty()) openedProjects[0] else null
+              // openOrImport(java.nio.file.Path path, Project projectToClose, boolean forceOpenInNewFrame) 
+              val openedProject = ProjectUtil.openOrImport(projectDir, projectToClose, false)
+              if (openedProject != null) {
+                logger.info { ">> Projector: Successfully opened project: $path" }
+              } else {
+                logger.info { ">> Projector: Project opening was cancelled or failed: $path" }
+              }
+
+            } catch (e: Exception) {
+              logger.error(e) { ">> Projector: Error opening project: $path" }
+            }
+          }, ModalityState.NON_MODAL)
+        } else {
+          // 说明 IDEA 核心还没加载完，建议给客户端一个反馈或者稍后重试
+          logger.info { ">> Projector: Cannot open project because IDEA Application is not yet initialized." }
+        }
       }
 
       // yswang add 接收到打开文件的指令
@@ -560,38 +565,43 @@ class ProjectorServer private constructor(
         val filePath = message.filePath
         val line = message.line
         logger.info { ">> Projector: Received request to open file: $filePath" }
+        
+        val application = ApplicationManager.getApplication()
+        if (application != null) {
+          application.invokeLater({
+            try {
+              val openedProjects = ProjectUtil.getOpenProjects()
+              val project = if (openedProjects.isNotEmpty()) openedProjects[0] else null
+              if (project == null) {
+                logger.info { ">> Projector: No project opened. Cannot open file: $filePath" }
+                return@invokeLater
+              }
 
-        ApplicationManager.getApplication().invokeLater({
-          try {
-            val openedProjects = ProjectUtil.getOpenProjects()
-            val project = if (openedProjects.isNotEmpty()) openedProjects[0] else null
-            if (project == null) {
-              logger.info { ">> Projector: No project opened. Cannot open file: $filePath" }
-              return@invokeLater
-            }
+              val ioPath = Paths.get(filePath).toAbsolutePath().normalize()
+              val virtualFile = com.intellij.openapi.vfs.LocalFileSystem.getInstance().refreshAndFindFileByPath(ioPath.toString())
+              if (virtualFile == null) {
+                logger.info { ">> Projector: File not found: $filePath" }
+                return@invokeLater
+              }
 
-            val ioPath = Paths.get(filePath).toAbsolutePath().normalize()
-            val virtualFile = com.intellij.openapi.vfs.LocalFileSystem.getInstance().refreshAndFindFileByPath(ioPath.toString())
-            if (virtualFile == null) {
-              logger.info { ">> Projector: File not found: $filePath" }
-              return@invokeLater
-            }
+              // 有行号就跳转，没有就直接打开
+              val descriptor = if (line > 0) {
+                com.intellij.openapi.fileEditor.OpenFileDescriptor(project, virtualFile, line - 1, 0)
+              } else {
+                com.intellij.openapi.fileEditor.OpenFileDescriptor(project, virtualFile)
+              }
+              if (descriptor.canNavigate()) {
+                descriptor.navigate(true)
+              }
 
-            // 有行号就跳转，没有就直接打开
-            val descriptor = if (line > 0) {
-              com.intellij.openapi.fileEditor.OpenFileDescriptor(project, virtualFile, line - 1, 0)
-            } else {
-              com.intellij.openapi.fileEditor.OpenFileDescriptor(project, virtualFile)
+              logger.info { ">> Projector: Successfully opened file: $filePath" }
+            } catch (e: Exception) {
+              logger.error(e) { ">> Projector: Error opening file: $filePath" }
             }
-            if (descriptor.canNavigate()) {
-              descriptor.navigate(true)
-            }
-
-            logger.info { ">> Projector: Successfully opened file: $filePath" }
-          } catch (e: Exception) {
-            logger.error(e) { ">> Projector: Error opening file: $filePath" }
-          }
-        }, ModalityState.defaultModalityState())
+          }, ModalityState.NON_MODAL)
+        } else {
+          logger.info { ">> Projector: Cannot open file because IDEA Application is not yet initialized." }
+        }
       }
 
       // 切换主题
@@ -602,15 +612,51 @@ class ProjectorServer private constructor(
           else -> message.theme  // 支持直接传主题原名
         }
 
-        ApplicationManager.getApplication().invokeLater({
-          val lafManager = com.intellij.ide.ui.LafManager.getInstance()
-          val lookFeel = lafManager.installedLookAndFeels.find { it.name.contains(themeName, ignoreCase = true) }
-          if (lookFeel != null) {
-            lafManager.setCurrentLookAndFeel(lookFeel)
-            lafManager.updateUI()
-            logger.info { ">> Projector: Theme changed to ${lookFeel.name}" }
-          }
-        }, ModalityState.NON_MODAL)
+        val application = ApplicationManager.getApplication()
+        if (application != null) {
+          application.invokeLater({
+            val lafManager = com.intellij.ide.ui.LafManager.getInstance()
+            val currentLaf = lafManager.currentLookAndFeel
+            val targetLaf = lafManager.installedLookAndFeels.find { it.name.contains(themeName, ignoreCase = true) }
+            if (targetLaf != null) {
+              // 如果主题一致,则不切换
+              if (currentLaf != null && currentLaf.name == targetLaf.name) {
+                return@invokeLater
+              }
+
+              // 1. 设置 UI 外观
+              lafManager.setCurrentLookAndFeel(targetLaf)
+              lafManager.updateUI()
+
+              // 2. 同步设置编辑器配色方案 (关键修复)
+              val editorColorsManager = com.intellij.openapi.editor.colors.EditorColorsManager.getInstance()
+              // 通常 Darcula 对应 "Darcula" 方案，Light 对应 "Default" 或 "IntelliJ Light"
+              val schemeName = when (targetLaf.name) {
+                "Darcula" -> "Darcula"
+                "IntelliJ Light" -> "IntelliJ Light"
+                else -> "Default"
+              }
+              val scheme = editorColorsManager.getScheme(schemeName)
+              if (scheme != null && editorColorsManager.globalScheme != scheme) {
+                editorColorsManager.globalScheme = scheme
+              }
+
+              // 3. 强制通知所有组件重新加载（包含图标缓存等）
+              lafManager.repaintUI()
+
+              // 4. 关键：通知 ProjectorServer 重新提取并向客户端推送最新的全局颜色定义 (如背景、边框色)
+              // 这样可以确保客户端浏览器的 CSS 变量与服务端主题同步
+              val currentColors = ideaColors.colors
+              if (currentColors != null) {
+                windowColorsEvent = ServerWindowColorsEvent(currentColors)
+              }
+
+              logger.info { ">> Projector: Theme changed to ${targetLaf.name}" }
+            }
+          }, ModalityState.NON_MODAL)
+        } else {
+          logger.info { ">> Projector: Cannot change theme because IDEA Application is not yet initialized." }
+        }
       }
 
     }
@@ -901,12 +947,12 @@ class ProjectorServer private constructor(
     private val logger = Logger<ProjectorServer>()
     
     /*
-        yswang add：安全获取 clientShift 的属性
-        修复没有客户端连接时报的异常: 
-        ProjectorServer :: Unhandled in daemon thread has happened :: java.lang.IndexOutOfBoundsException: Index 0 out of bounds for length 0
-            at org.jetbrains.projector.awt.image.PGraphicsEnvironment$Companion.getDefaultDevice(PGraphicsEnvironment.kt:44)
-            at org.jetbrains.projector.server.ProjectorServer$Companion.calculateMainWindowShift(ProjectorServer.kt:948)
-            at org.jetbrains.projector.server.ProjectorServer$Companion.access$calculateMainWindowShift(ProjectorServer.kt:895)
+      yswang add：安全获取 clientShift 的属性
+      修复没有客户端连接时报的异常: 
+      ProjectorServer :: Unhandled in daemon thread has happened :: java.lang.IndexOutOfBoundsException: Index 0 out of bounds for length 0
+          at org.jetbrains.projector.awt.image.PGraphicsEnvironment$Companion.getDefaultDevice(PGraphicsEnvironment.kt:44)
+          at org.jetbrains.projector.server.ProjectorServer$Companion.calculateMainWindowShift(ProjectorServer.kt:948)
+          at org.jetbrains.projector.server.ProjectorServer$Companion.access$calculateMainWindowShift(ProjectorServer.kt:895)
     */
     private val safeClientShift: AwtPoint
       get() = try {
