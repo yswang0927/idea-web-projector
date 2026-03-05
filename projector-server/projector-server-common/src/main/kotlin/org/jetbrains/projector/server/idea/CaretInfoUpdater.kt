@@ -387,8 +387,8 @@ class CaretInfoUpdater(private val onCaretInfoChanged: (ServerCaretInfoChangedEv
               }
             }
 
-            // yswang 轮询间隔从 10ms 提高到 30ms，大幅降低 EDT 阻塞与性能消耗
-            Thread.sleep(30)
+            // yswang 轮询间隔从 10ms 提高到 50ms，大幅降低 EDT 阻塞与性能消耗
+            Thread.sleep(50)
           }
           catch (ex: InterruptedException) {
             Thread.currentThread().interrupt()
