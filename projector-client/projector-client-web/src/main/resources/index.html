@@ -79,6 +79,11 @@
             window.projectorChangeTheme(paramTheme);
           }, 300);
         }
+
+        // 手工触发下窗口resize事件,让IDEA自动适应浏览器窗口大小
+        setTimeout(function(){
+          window.dispatchEvent(new Event('resize'));
+        }, 1500);
       }
     });
 

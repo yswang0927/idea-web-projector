@@ -50,6 +50,105 @@ idea-2021.3.3
 
 ## 4. 定制修改的地方
 
+- `projector-client/projector-client-web/src/main/resources/index.html`
+```html
+<script>
+  // iframe 内部接收
+  const params = new URLSearchParams(window.location.search);
+  let paramProjectPath = params.get('projectPath') || '';
+  let paramFilePath = params.get('filePath') || '';
+  let paramLineNo = params.get('lineNumber') || 0;
+  let paramTheme = params.get('theme') || '';
+
+  let isMainWindowReady = false;
+  // 当主窗口准备好后, 自动处理需要打开的指令操作
+  window.addEventListener('projectorWindowReady', function() {
+    if (!isMainWindowReady) {
+      isMainWindowReady = true;
+      if (paramProjectPath) {
+        setTimeout(function(){
+          window.projectorOpenProject(paramProjectPath);
+        }, 300);
+      }
+
+      if (paramFilePath) {
+        setTimeout(function(){
+          window.projectorOpenFile(paramFilePath, paramLineNo);
+        }, 300);
+      }
+
+      if (paramTheme) {
+        setTimeout(function(){
+          window.projectorChangeTheme(paramTheme);
+        }, 300);
+      }
+
+      // 手工触发下窗口resize事件,让IDEA自动适应浏览器窗口大小
+      setTimeout(function(){
+        window.dispatchEvent(new Event('resize'));
+      }, 300);
+    }
+  });
+
+  window.addEventListener('message', (event) => {
+    // {'action':'openProject', 'value': '/path'}
+    // {'action':'openFile', 'value': '/path/file'}
+    const msg = event.data;
+    if (typeof msg !== 'object' || msg === null) return;
+    const action = msg.action || 'unknown';
+    const value = msg.value || '';
+
+    if (!isMainWindowReady) {
+      console.warn(">> 主窗口未准备好, 不能立刻处理事件: ", msg);
+    }
+
+    switch (action) {
+      // 打开项目
+      case 'openProject':
+        if (value && typeof value === 'string') {
+          paramProjectPath = value;
+          isMainWindowReady && window.projectorOpenProject(value);
+        }
+        break;
+      // 打开文件,支持行号: /A.java#L10
+      case 'openFile':
+        if (value && typeof value === 'string') {
+          let filePath = value;
+          let lineNo = 0;
+          const lineIndex = value.indexOf('#L');
+          if (lineIndex != -1) {
+            filePath = value.substring(0, lineIndex);
+            lineNo = parseInt(value.substring(lineIndex + 2)) || 0;
+          }
+          if (filePath) {
+            // 相对路径, 需要拼接上项目路径
+            if (filePath.charAt(0) != '/') {
+              if (!paramProjectPath) {
+                console.warn('>> 无项目路径, 无法打开相对路径文件: '+ filePath);
+                return;
+              }
+              filePath = paramProjectPath + (paramProjectPath.charAt(paramProjectPath.length - 1) != '/' ? '/' : '') + filePath;
+            }
+            paramFilePath = filePath;
+            paramLineNo = Math.max(0, lineNo);
+            isMainWindowReady && window.projectorOpenFile(filePath, Math.max(0, lineNo));
+          }
+        }
+        break;
+      // 切换主题
+      case 'theme':
+        if (value && typeof value === 'string') {
+          paramTheme = value;
+          isMainWindowReady && window.projectorChangeTheme(value);
+        }
+        break;
+      default:
+        console.error('>> 无效的命令: ', msg);
+    }
+  });
+</script>
+```
+
 - `projector-client/projector-client-common/src/jsMain/kotlin/org/jetbrains/projector/client/common/misc/ParamsProvider.kt`
 ```kotlin
 // yswang 声明新变量
