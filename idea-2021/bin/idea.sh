@@ -19,6 +19,31 @@ PRGDIR=`dirname "$PRG"`
 
 [ -z "$IDE_HOME" ] && IDE_HOME=`cd "$PRGDIR/.." >/dev/null; pwd`
 
+#---- yswang auto copy eula accepted file ----
+TARGET_DIR="$HOME/.java/.userPrefs/jetbrains/"
+EUA_DIR="$IDE_HOME/eua"
+
+mkdir -p "$TARGET_DIR"
+if [ -d "$EUA_DIR" ]; then
+  if [ ! -f "$TARGET_DIR/idea-web-eua.txt" ]; then
+    echo ">> Initializing IDEA-web EULA and preferences..."
+    cp -a "$EUA_DIR/." "$TARGET_DIR"
+    chown -R "$(id -u):$(id -g)" "$TARGET_DIR"
+  fi
+fi
+#----------------------------------------------
+
+#---- yswang disable send data ----------------------------------
+CONSENT_DIR_SHARE="$HOME/.local/share/JetBrains/consentOptions"
+mkdir -p "$CONSENT_DIR_SHARE"
+if [ ! -f "$CONSENT_DIR_SHARE/accepted" ]; then
+  TIMESTAMP=$(date +%s000)
+  CONSENT_STRING="rsch.send.usage.stat:1.1:0:$TIMESTAMP"
+  echo -n "$CONSENT_STRING" > "$CONSENT_DIR_SHARE/accepted"
+  echo ">> Data Sharing dialog suppressed successfully."
+fi
+#----------------------------------------------------------------
+
 message()
 {
   TITLE="Cannot start IntelliJ IDEA"
