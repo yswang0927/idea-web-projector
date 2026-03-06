@@ -542,10 +542,26 @@ class ProjectorServer private constructor(
               val openedProjects = ProjectUtil.getOpenProjects()
               // 寻找需要关闭的项目（通常是第一个）
               val projectToClose = if (openedProjects.isNotEmpty()) openedProjects[0] else null
-              // openOrImport(java.nio.file.Path path, Project projectToClose, boolean forceOpenInNewFrame) 
               val openedProject = ProjectUtil.openOrImport(projectDir, projectToClose, false)
               if (openedProject != null) {
                 logger.info { ">> Projector: Successfully opened project: $path" }
+                // 项目加载后自动打开左侧项目资源管理器视图
+                // 必须使用 StartupManager 等待项目完全初始化，否则可能取不到 ToolWindow
+                com.intellij.openapi.startup.StartupManager.getInstance(openedProject).runWhenProjectIsInitialized {
+                  // 切回 EDT 线程操作 UI
+                  application.invokeLater({
+                    try {
+                      val toolWindowManager = com.intellij.openapi.wm.ToolWindowManager.getInstance(openedProject)
+                      if (toolWindowManager != null) {
+                        val projectViewWindow = toolWindowManager.getToolWindow(com.intellij.openapi.wm.ToolWindowId.PROJECT_VIEW)
+                        projectViewWindow?.show(null)
+                      }
+                    } catch (e: Exception) {
+                      logger.error(e) { ">> Projector: Failed to show ProjectView tool window." }
+                    }
+                  }, ModalityState.NON_MODAL)
+                }
+
               } else {
                 logger.info { ">> Projector: Project opening was cancelled or failed: $path" }
               }
