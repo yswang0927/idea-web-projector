@@ -10,8 +10,17 @@
   <link href="styles.css" rel="stylesheet" type="text/css">
   <link href="manifest.webmanifest" rel="manifest">
   <link href="apple-touch-icon.png" rel="apple-touch-icon" sizes="192x192" >
-  <script src="pako-1.0.11.min.js"></script>
+  <script src="pako-2.1.0.min.js"></script>
   <script>
+    // yswang add: 修正 enableCompression 参数以使用 gzip
+    // 主要原因是 Java 压缩代码是 int8，但 pako.inflate 需要 uint8。
+    // see https://github.com/JetBrains/projector-client/pull/152/changes
+    // 用在 GZipToClientMessageDecompressor#L43(private val pako: dynamic = js("window.pakoDepress"))
+    window.pakoDepress = (data) => {
+      const decompressedData = pako.inflate(new Uint8Array(data.buffer))
+      return new Int8Array(decompressedData.buffer)
+    };
+
     // Disable caching for some scripts (described here: https://stackoverflow.com/questions/118884/how-to-force-the-browser-to-reload-cached-css-js-files):
     const timestamp = Math.floor(Date.now());
     const notCachableScripts = [

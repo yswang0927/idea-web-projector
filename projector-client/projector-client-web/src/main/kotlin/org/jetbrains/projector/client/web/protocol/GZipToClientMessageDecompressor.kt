@@ -29,10 +29,16 @@ import org.jetbrains.projector.common.protocol.handshake.CompressionType
 object GZipToClientMessageDecompressor : MessageDecompressor<ByteArray> {
 
   override fun decompress(data: ByteArray): ByteArray {
-    return pako.inflate(data) as ByteArray
+    // yswang add: 修正 enableCompression 参数以使用 gzip
+    // 主要原因是 Java 压缩代码是 int8，但 pako.inflate 需要 uint8。
+    // see https://github.com/JetBrains/projector-client/pull/152/changes
+    //return pako.inflate(data) as ByteArray
+    return pako(data)
   }
 
   override val compressionType = CompressionType.GZIP
 
-  private val pako: dynamic = js("window.pako")
+  // yswang change to:
+  //private val pako: dynamic = js("window.pako")
+  private val pako: dynamic = js("window.pakoDepress")
 }

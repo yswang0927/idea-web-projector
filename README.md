@@ -149,6 +149,15 @@ idea-2021.3.3
 </script>
 ```
 
+- `projector-client/projector-client-web/src/main/kotlin/org/jetbrains/projector/client/web/state/ClientState.kt`
+```kotlin
+// 进行了部分信息汉化
+// yswang add: 在创建新连接前关闭旧的 websocket
+// https://github.com/JetBrains/projector-client/pull/156/changes
+webSocket.onclose = null
+webSocket.close()
+```
+
 - `projector-client/projector-client-common/src/jsMain/kotlin/org/jetbrains/projector/client/common/misc/ParamsProvider.kt`
 ```kotlin
 // yswang 声明新变量

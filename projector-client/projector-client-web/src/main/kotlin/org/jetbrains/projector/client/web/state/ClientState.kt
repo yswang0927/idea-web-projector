@@ -609,6 +609,11 @@ sealed class ClientState {
       typing.dispose()
       connectionWatcher.removeWatcher()
 
+      // yswang add: 在创建新连接前关闭旧的 websocket
+      // https://github.com/JetBrains/projector-client/pull/156/changes
+      webSocket.onclose = null
+      webSocket.close()
+
       layers.reconnectionMessageUpdater(messageText)
 
       val newConnection = createWebSocketConnection(webSocket.url, stateMachine)
