@@ -577,7 +577,20 @@ class ProjectorServer private constructor(
                 return@invokeLater
               }
 
-              val ioPath = Paths.get(filePath).toAbsolutePath().normalize()
+              val rawPath = Paths.get(filePath);
+              val ioPath = if (rawPath.isAbsolute()) {
+                rawPath.normalize()
+              } else {
+                // 如果是相对路径，基于当前项目的根目录进行拼接
+                val basePath = project.basePath
+                if (basePath != null) {
+                  java.nio.file.Paths.get(basePath, filePath).normalize()
+                } else {
+                  // 极少数情况：项目没有 basePath (比如 Default Project)，作为兜底转为绝对路径
+                  rawPath.toAbsolutePath().normalize()
+                }
+              }
+
               val virtualFile = com.intellij.openapi.vfs.LocalFileSystem.getInstance().refreshAndFindFileByPath(ioPath.toString())
               if (virtualFile == null) {
                 logger.info { ">> Projector: File not found: $filePath" }

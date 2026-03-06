@@ -36,9 +36,11 @@ class WebWindowManager(private val stateMachine: ClientStateMachine, override va
     (window.asDynamic()).projectorChangeTheme = ::changeTheme
 
     // 检查 URL 参数启动参数
-    ParamsProvider.PROJECT_PATH?.let { openProject(it) }
-    ParamsProvider.FILE_PATH?.let { openFile(it, ParamsProvider.FILE_LINE ?: 0) }
-    ParamsProvider.THEME?.let { changeTheme(it) }
+    // 这里不能这样处理了, 如果服务端UI主窗口未准备完成(比如首次的EUA协议阅读窗口等), 此时发送打开项目等指令会造成异常
+    // 替换采用: 在WindowDataEventsProcessor中通过触发自定义事件(CustomEvent("projectorWindowReady"))来通知
+    //ParamsProvider.PROJECT_PATH?.let { openProject(it) }
+    //ParamsProvider.FILE_PATH?.let { openFile(it, ParamsProvider.FILE_LINE ?: 0) }
+    //ParamsProvider.THEME?.let { changeTheme(it) }
     // ----------------
   }
 

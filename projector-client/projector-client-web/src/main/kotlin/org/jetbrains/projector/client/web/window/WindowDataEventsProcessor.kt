@@ -1,26 +1,3 @@
-/*
- * MIT License
- *
- * Copyright (c) 2019-2023 JetBrains s.r.o.
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
 package org.jetbrains.projector.client.web.window
 
 import kotlinx.browser.document
@@ -38,6 +15,10 @@ class WindowDataEventsProcessor(private val windowManager: WebWindowManager) {
 
   var excludedWindowIds = emptyList<Int>()
     private set
+
+
+  // yswang add：用来保证 onWindowReady 只执行一次
+  private var isWindowReadyFired = false
 
   fun onClose() {
     process(ServerWindowSetChangedEvent(emptyList()))
@@ -59,7 +40,6 @@ class WindowDataEventsProcessor(private val windowManager: WebWindowManager) {
 
     presentedWindows.forEach { event ->
       val window = windowManager.getOrCreate(event)
-
       event.cursorType?.let { window.cursorType = it }
       window.title = event.title
       window.isShowing = event.isShowing
@@ -69,6 +49,48 @@ class WindowDataEventsProcessor(private val windowManager: WebWindowManager) {
 
     setTitle(presentedWindows)
     setFavIcon(presentedWindows)
+
+    // yswang add: 判断是否是主窗口
+    if (!isWindowReadyFired) {
+      val isIdeReady = presentedWindows
+        .filter { it.isShowing }
+        .any { win ->
+          val winClass = win.windowClass?.toString() ?: ""
+          val isModal = win.modal ?: false
+
+          // 1：如果是真正的项目窗口，绝对放行 (应对 IDEA 自动恢复了上次的项目)
+          if (win.windowType == WindowType.IDEA_WINDOW && !isModal) {
+            return@any true
+          }
+
+          // 2：如果是普通窗口，需要判断是不是 Welcome 界面
+          if (!"FRAME".equals(winClass, ignoreCase = true) || isModal) {
+            return@any false
+          }
+
+          if (win.windowType == WindowType.WINDOW && win.bounds.width > 200 && win.bounds.height > 100) {
+            val title = win.title ?: ""
+            val isEulaOrDialog = title.contains("Agreement", ignoreCase = true)
+                                  || title.contains("License", ignoreCase = true)
+                                  || title.contains("用户协议")
+                                  || title.contains("Data Sharing", ignoreCase = true)
+                                  || title.contains("数据共享")
+            
+            // win.title == null 表示 Splash Screen (启动画面)
+            if (win.title != null && !isEulaOrDialog) {
+              return@any true
+            }
+          }
+          
+          false // 其他小弹窗、EUA 弹窗一律无视
+        }
+      
+      if (isIdeReady) {
+        isWindowReadyFired = true // 立刻锁死，防止重复触发
+        kotlinx.browser.window.dispatchEvent(org.w3c.dom.CustomEvent("projectorWindowReady"))
+      }
+    }
+
   }
 
   private fun setTitle(presentedWindows: Iterable<WindowData>) {
