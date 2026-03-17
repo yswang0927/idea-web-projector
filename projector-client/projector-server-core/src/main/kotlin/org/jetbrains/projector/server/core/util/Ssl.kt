@@ -27,6 +27,7 @@ import org.java_websocket.WebSocketServerFactory
 import org.java_websocket.server.DefaultSSLWebSocketServerFactory
 import org.jetbrains.projector.util.loading.getOption
 import org.jetbrains.projector.util.logging.Logger
+import java.io.File
 import java.io.FileInputStream
 import java.security.KeyStore
 import java.util.*
@@ -49,11 +50,27 @@ public data class SSLProperties(
   val keyPassword: String,
 )
 
+// yswang add 支持动态替换 properties 变量值中的占位符: ${xxx}
+private fun resolvePlaceholders(str: String): String {
+  val regex = Regex("\\$\\{([^}]+)}")
+  return regex.replace(str) { matchResult ->
+    val key = matchResult.groupValues[1]
+    // 优先级查找：JVM 属性 -> 环境变量 -> 找不到则原样保留占位符
+    System.getProperty(key) ?: System.getenv(key) ?: matchResult.value
+  }
+}
+
 public fun loadSSLProperties(path: String): SSLProperties {
-  fun Properties.getOrThrow(key: String) : String = requireNotNull(this.getProperty(key)) { "Can't find $key in properties file" }
+  // yswang modify
+  fun Properties.getOrThrow(key: String) : String {
+    val rawValue = requireNotNull(this.getProperty(key)) { "Can't find $key in properties file" }
+    return resolvePlaceholders(rawValue)
+  }
 
   val props = Properties().apply {
-    load(FileInputStream(path))
+    // yswang 使用 use 块确保文件流被正确关闭
+    //load(FileInputStream(path))
+    File(path).inputStream().use { load(it) }
   }
 
   return SSLProperties(
@@ -71,7 +88,11 @@ public fun setSsl(setWebSocketFactory: (WebSocketServerFactory) -> Unit): String
     val sslProperties = loadSSLProperties(sslPropertiesFilePath)
 
     val keyStore = KeyStore.getInstance(sslProperties.storeType).apply {
-      load(FileInputStream(sslProperties.filePath), sslProperties.storePassword.toCharArray())
+      // yswang 使用 use 块确保文件流被正确关闭
+      //load(FileInputStream(sslProperties.filePath), sslProperties.storePassword.toCharArray())
+      FileInputStream(sslProperties.filePath).use { stream ->
+        load(stream, sslProperties.storePassword.toCharArray())
+      }
     }
 
     val keyManagerFactory = KeyManagerFactory.getInstance("SunX509").apply {

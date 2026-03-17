@@ -77,10 +77,14 @@ class ClipboardHandler(private val onCopyFailed: (ClientNotificationEvent) -> Un
       !isGecko() -> return "Copying using Document.execCommand works only in Firefox"
     }
 
+    // yswang 完善
     val textArea = document.createElement("textarea") as HTMLTextAreaElement
-    textArea.id = "copyArea"
+    textArea.id = "ideCopyTextArea"
+    textArea.setAttribute("readonly", "")
     textArea.value = textToCopy
-    textArea.style.display = "hidden"
+    textArea.style.position = "absolute"
+    textArea.style.left = "-9999px"
+    textArea.style.fontSize = "12pt"
 
     document.body!!.appendChild(textArea)
 
@@ -95,7 +99,7 @@ class ClipboardHandler(private val onCopyFailed: (ClientNotificationEvent) -> Un
       logger.error(t) { "Error while running 'document.execCommand(\"copy\")'" }
     }
     finally {
-      textArea.remove()
+      document.body!!.removeChild(textArea)
     }
 
     return if (isCopied) null else "Document.execCommand failed, check console for info from browser"

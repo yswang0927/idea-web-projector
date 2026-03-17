@@ -158,6 +158,45 @@ webSocket.onclose = null
 webSocket.close()
 ```
 
+- `projector-client/projector-client-web/src/main/kotlin/org/jetbrains/projector/client/web/ClipboardHandler.kt`
+```kotlin
+// 进行了部分信息汉化 和 剪贴板优化处理
+```
+
+- `projector-client/projector-server-core/src/main/kotlin/org/jetbrains/projector/server/core/util/Ssl.kt`
+```kotlin
+// yswang add 支持动态替换 properties 变量值中的占位符: ${xxx}
+private fun resolvePlaceholders(str: String): String {
+  val regex = Regex("\\$\\{([^}]+)}")
+  return regex.replace(str) { matchResult ->
+    val key = matchResult.groupValues[1]
+    // 优先级查找：JVM 属性 -> 环境变量 -> 找不到则原样保留占位符
+    System.getProperty(key) ?: System.getenv(key) ?: matchResult.value
+  }
+}
+
+public fun loadSSLProperties(path: String): SSLProperties {
+  // yswang modify
+  fun Properties.getOrThrow(key: String) : String {
+    val rawValue = requireNotNull(this.getProperty(key)) { "Can't find $key in properties file" }
+    return resolvePlaceholders(rawValue)
+  }
+
+  val props = Properties().apply {
+    // yswang 使用 use 块确保文件流被正确关闭
+    //load(FileInputStream(path))
+    File(path).inputStream().use { load(it) }
+  }
+
+  return SSLProperties(
+    storeType = props.getOrThrow(SSL_STORE_TYPE),
+    filePath = props.getOrThrow(SSL_FILE_PATH),
+    storePassword = props.getOrThrow(SSL_STORE_PASSWORD),
+    keyPassword = props.getOrThrow(SSL_KEY_PASSWORD)
+  )
+}
+```
+
 - `projector-client/projector-client-common/src/jsMain/kotlin/org/jetbrains/projector/client/common/misc/ParamsProvider.kt`
 ```kotlin
 // yswang 声明新变量

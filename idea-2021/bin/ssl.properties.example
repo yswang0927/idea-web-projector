@@ -1,0 +1,4 @@
+STORE_TYPE=PKCS12
+FILE_PATH=${IDE_HOME}/projector-server/projector.p12
+STORE_PASSWORD=projector@2026
+KEY_PASSWORD=projector@2026

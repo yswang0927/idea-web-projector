@@ -6,11 +6,13 @@
   <meta content="JetBrains Projector" name="apple-mobile-web-app-title"/>
   <meta content="yes" name="apple-mobile-web-app-capable"/>
   <meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport"/>
-  <link href="pj.svg" rel="shortcut icon" type="image/x-icon">
-  <link href="styles.css" rel="stylesheet" type="text/css">
-  <link href="manifest.webmanifest" rel="manifest">
-  <link href="apple-touch-icon.png" rel="apple-touch-icon" sizes="192x192" >
-  <script src="pako-2.1.0.min.js"></script>
+  <link href="./pj.svg" rel="shortcut icon" type="image/x-icon">
+  <link href="./styles.css" rel="stylesheet" type="text/css">
+  <!-- yswang注释掉
+  <link href="./manifest.webmanifest" rel="manifest">
+  -->
+  <link href="./apple-touch-icon.png" rel="apple-touch-icon" sizes="192x192" >
+  <script src="./pako-2.1.0.min.js"></script>
   <script>
     // yswang add: 修正 enableCompression 参数以使用 gzip
     // 主要原因是 Java 压缩代码是 int8，但 pako.inflate 需要 uint8。
@@ -44,9 +46,10 @@
       }
     }
 
+    /* yswang 注释掉
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker
-          .register('/projector-client/serviceworker.js')
+          .register('./serviceworker.js')
           .then(
               function () {
                 console.log('Service Worker registered');
@@ -55,7 +58,7 @@
                 console.log('Service Worker registration failed', e);
               },
           );
-    }
+    }*/
   </script>
 
   <script>
