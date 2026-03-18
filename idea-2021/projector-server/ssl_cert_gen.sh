@@ -1,7 +1,7 @@
 openssl req -x509 -nodes -days 3650 -newkey rsa:2048 \
   -keyout projector.key \
   -out projector.crt \
-  -subj "/C=CN/ST=JS/L=NJ/O=FH/CN=localhost"
+  -subj "/C=CN/ST=JS/L=NJ/O=FH/OU=GY/CN=localhost"
 
 openssl pkcs12 -export \
   -out projector.p12 \

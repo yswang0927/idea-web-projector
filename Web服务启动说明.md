@@ -38,4 +38,4 @@ FILE_PATH=${IDE_HOME}/projector-server/projector.p12
 STORE_PASSWORD=projector@2026
 KEY_PASSWORD=projector@2026
 ```
-- 或者通过 `export IDE_SERVER_SSL_FILE_PATH="/path/ssl.properties"` 来自己指定SSL配置文件路径.
+- 或者通过 `export IDE_SERVER_SSL_CONFIG_PATH="/path/ssl.properties"` 来自己指定SSL配置文件路径.
