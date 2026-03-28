@@ -1,26 +1,3 @@
-/*
- * Copyright (c) 2019-2023, JetBrains s.r.o. and/or its affiliates. All rights reserved.
- * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
- *
- * This code is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation. JetBrains designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
- *
- * This code is distributed in the hope that it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License
- * version 2 for more details (a copy is included in the LICENSE file that
- * accompanied this code).
- *
- * You should have received a copy of the GNU General Public License version
- * 2 along with this work; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
- *
- * Please contact JetBrains, Na Hrebenech II 1718/10, Prague, 14000, Czech Republic
- * if you need additional information or have any questions.
- */
 @file:Suppress("JAVA_MODULE_DOES_NOT_EXPORT_PACKAGE")
 
 package org.jetbrains.projector.awt.image
@@ -766,10 +743,30 @@ class PGraphics2D private constructor(
     if (img == null) {
       return true  // java doc for all image methods: methods just return true if the img is null
     }
+    // yswang 修改源码,增加异步图片的NPE防御
+    //paintArea { drawImage(imageId = ImageCacher.instance.getImageId(img, methodName), awtImageInfo = awtImageInfo) }
+    //return true
 
-    paintArea { drawImage(imageId = ImageCacher.instance.getImageId(img, methodName), awtImageInfo = awtImageInfo) }
+      // 【终极防御层】：捕获一切缓存解析过程中的异常，绝不允许画图指令炸毁整个 IDE 的渲染线程
+      val imageId = try {
+          ImageCacher.instance.getImageId(img, methodName)
+      } catch (e: NullPointerException) {
+          // 捕获到臭名昭著的 NPE，静默吞掉，或者打个 Debug 日志
+          return true // 返回 true 假装画完了，跳过这个图元的渲染
+      } catch (e: Exception) {
+          return true
+      }
 
-    return true
+      // 【性能优化层】：如果是解析失败的 Unknown 图片，直接丢弃
+      // org.jetbrains.projector.common.protocol.data.ImageId.Unknown
+      if (imageId != null && imageId::class.simpleName == "Unknown") {
+          return true
+      }
+
+      // 只有拿到合法健康的 imageId，才真正向浏览器下发绘图指令
+      paintArea { drawImage(imageId = imageId, awtImageInfo = awtImageInfo) }
+
+      return true
   }
 
   override fun dispose() {

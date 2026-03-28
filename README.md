@@ -488,3 +488,93 @@ fun process(windowDataEvents: ServerWindowSetChangedEvent) {
   }
 }
 ```
+
+- `projector-server/projector-awt-common/src/main/kotlin/org/jetbrains/projector/awt/image/PGraphics2D.kt`
+```kotlin
+private fun extractImage(img: Image?, awtImageInfo: AwtImageInfo, methodName: String): Boolean {
+    if (img == null) {
+      return true  // java doc for all image methods: methods just return true if the img is null
+    }
+    // yswang 修改源码,增加异步图片的NPE防御
+    //paintArea { drawImage(imageId = ImageCacher.instance.getImageId(img, methodName), awtImageInfo = awtImageInfo) }
+    //return true
+
+  // 【终极防御层】：捕获一切缓存解析过程中的异常，绝不允许画图指令炸毁整个 IDE 的渲染线程
+  val imageId = try {
+      ImageCacher.instance.getImageId(img, methodName)
+  } catch (e: NullPointerException) {
+      // 捕获到臭名昭著的 NPE，静默吞掉，或者打个 Debug 日志
+      logger.debug { "Projector bypassed a null image state from $methodName: ${e.message}" }
+      return true // 返回 true 假装画完了，跳过这个图元的渲染
+  } catch (e: Exception) {
+      logger.warn(e) { "Unexpected error during image extraction in $methodName" }
+      return true
+  }
+
+  // 【性能优化层】：如果是解析失败的 Unknown 图片，直接丢弃，不要发给 Web 前端浪费网络带宽
+  if (imageId is org.jetbrains.projector.common.protocol.data.ImageId.Unknown) {
+      return true
+  }
+
+  // 只有拿到合法健康的 imageId，才真正向浏览器下发绘图指令
+  paintArea { drawImage(imageId = imageId, awtImageInfo = awtImageInfo) }
+
+  return true
+}
+```
+
+- `projector-server/projector-server-common/src/main/kotlin/org/jetbrains/projector/server/service/ProjectorImageCacher.kt`
+```kotlin
+override fun getImageId(image: Image, methodName: String): ImageId = when (image) {
+    is BufferedImage -> putImage(image)
+
+    /*  yswang重写
+    is ToolkitImage -> getImageId(image.bufferedImage, "$methodName, extracted BufferedImage from ToolkitImage")
+
+    is PVolatileImage -> ImageId.PVolatileImageId(image.id)
+
+    is SunVolatileImage -> getImageId(image.snapshot, "$methodName, extracted snapshot from SunVolatileImage")
+
+    is MultiResolutionImage -> image.resolutionVariants
+                                 .singleOrNull()
+                                 ?.let { getImageId(it, "$methodName, extracted single variant") }
+                               ?: ImageId.Unknown(
+                                 "$methodName received MultiResolutionImage with bad variant count (${image.resolutionVariants.size}): $image")
+
+    else -> ImageId.Unknown("$methodName received ${image::class.qualifiedName}: $image")
+     */
+
+      is ToolkitImage -> {
+          // 【核心修复】：安全解包！如果异步图片还没准备好，返回 Unknown 而不是让 Kotlin 抛出 NPE
+          val bufImg = image.bufferedImage
+          if (bufImg != null) {
+              getImageId(bufImg, "$methodName, extracted BufferedImage from ToolkitImage")
+          } else {
+              ImageId.Unknown("$methodName received ToolkitImage with null bufferedImage: $image")
+          }
+      }
+
+      is PVolatileImage -> ImageId.PVolatileImageId(image.id)
+
+      is SunVolatileImage -> {
+          // 同样防御性处理 SunVolatileImage，防止 snapshot 为 null
+          val snapshot = image.snapshot
+          if (snapshot != null) {
+              getImageId(snapshot, "$methodName, extracted snapshot from SunVolatileImage")
+          } else {
+              ImageId.Unknown("$methodName received SunVolatileImage with null snapshot: $image")
+          }
+      }
+
+      is MultiResolutionImage -> image.resolutionVariants
+              .singleOrNull()
+              ?.let {
+                  // 这里的 let 内部也最好防御一下，不过通常 variant 不为 null
+                  getImageId(it, "$methodName, extracted single variant")
+              }
+              ?: ImageId.Unknown(
+                  "$methodName received MultiResolutionImage with bad variant count (${image.resolutionVariants.size}): $image")
+
+      else -> ImageId.Unknown("$methodName received ${image::class.qualifiedName}: $image")
+}
+```

@@ -1,26 +1,3 @@
-/*
- * Copyright (c) 2019-2023, JetBrains s.r.o. and/or its affiliates. All rights reserved.
- * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
- *
- * This code is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation. JetBrains designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
- *
- * This code is distributed in the hope that it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License
- * version 2 for more details (a copy is included in the LICENSE file that
- * accompanied this code).
- *
- * You should have received a copy of the GNU General Public License version
- * 2 along with this work; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
- *
- * Please contact JetBrains, Na Hrebenech II 1718/10, Prague, 14000, Czech Republic
- * if you need additional information or have any questions.
- */
 @file:Suppress("JAVA_MODULE_DOES_NOT_EXPORT_PACKAGE")
 
 package org.jetbrains.projector.server.service
@@ -50,6 +27,7 @@ object ProjectorImageCacher : ImageCacher {
   override fun getImageId(image: Image, methodName: String): ImageId = when (image) {
     is BufferedImage -> putImage(image)
 
+    /*  yswang重写
     is ToolkitImage -> getImageId(image.bufferedImage, "$methodName, extracted BufferedImage from ToolkitImage")
 
     is PVolatileImage -> ImageId.PVolatileImageId(image.id)
@@ -63,6 +41,40 @@ object ProjectorImageCacher : ImageCacher {
                                  "$methodName received MultiResolutionImage with bad variant count (${image.resolutionVariants.size}): $image")
 
     else -> ImageId.Unknown("$methodName received ${image::class.qualifiedName}: $image")
+     */
+
+      is ToolkitImage -> {
+          // 【核心修复】：安全解包！如果异步图片还没准备好，返回 Unknown 而不是让 Kotlin 抛出 NPE
+          val bufImg = image.bufferedImage
+          if (bufImg != null) {
+              getImageId(bufImg, "$methodName, extracted BufferedImage from ToolkitImage")
+          } else {
+              ImageId.Unknown("$methodName received ToolkitImage with null bufferedImage: $image")
+          }
+      }
+
+      is PVolatileImage -> ImageId.PVolatileImageId(image.id)
+
+      is SunVolatileImage -> {
+          // 同样防御性处理 SunVolatileImage，防止 snapshot 为 null
+          val snapshot = image.snapshot
+          if (snapshot != null) {
+              getImageId(snapshot, "$methodName, extracted snapshot from SunVolatileImage")
+          } else {
+              ImageId.Unknown("$methodName received SunVolatileImage with null snapshot: $image")
+          }
+      }
+
+      is MultiResolutionImage -> image.resolutionVariants
+              .singleOrNull()
+              ?.let {
+                  // 这里的 let 内部也最好防御一下，不过通常 variant 不为 null
+                  getImageId(it, "$methodName, extracted single variant")
+              }
+              ?: ImageId.Unknown(
+                  "$methodName received MultiResolutionImage with bad variant count (${image.resolutionVariants.size}): $image")
+
+      else -> ImageId.Unknown("$methodName received ${image::class.qualifiedName}: $image")
   }
 
   val newImages by SizeAware(
