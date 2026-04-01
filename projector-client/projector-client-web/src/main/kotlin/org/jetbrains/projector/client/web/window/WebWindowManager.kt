@@ -31,9 +31,10 @@ class WebWindowManager(private val stateMachine: ClientStateMachine, override va
     // --- yswang 新增逻辑 ---
     // --- 将方法暴露给全局 JS (window 对象) ---
     // 这样你在浏览器控制台输入 window.projectorOpenProject(...) 就能调用
-    (window.asDynamic()).projectorOpenProject = ::openProject
-    (window.asDynamic()).projectorOpenFile = ::openFile
-    (window.asDynamic()).projectorChangeTheme = ::changeTheme
+    val dyncWindow = window.asDynamic()
+    dyncWindow.projectorOpenProject = ::openProject
+    dyncWindow.projectorOpenFile = ::openFile
+    dyncWindow.projectorChangeTheme = ::changeTheme
 
     // 检查 URL 参数启动参数
     // 这里不能这样处理了, 如果服务端UI主窗口未准备完成(比如首次的EUA协议阅读窗口等), 此时发送打开项目等指令会造成异常

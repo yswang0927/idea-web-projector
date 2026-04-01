@@ -1,5 +1,6 @@
 package org.jetbrains.projector.client.web.window
 
+import kotlinx.browser.window
 import kotlinx.browser.document
 import org.jetbrains.projector.client.common.canvas.Extensions.argbIntToRgbaString
 import org.jetbrains.projector.client.common.misc.ParamsProvider
@@ -51,9 +52,9 @@ object OnScreenMessenger : LafListener {
     
     a.onclick = { event ->
       event.preventDefault() 
-      val dynamicWindow = window.asDynamic()
-      if (dynamicWindow.reconnectProjector != undefined) {
-        dynamicWindow.reconnectProjector()
+      val dyncWindow = window.asDynamic()
+      if (dyncWindow.reconnectProjector != undefined) {
+        dyncWindow.reconnectProjector()
       } else {
         window.location.reload()
       }
