@@ -73,31 +73,34 @@
 
     // 当主窗口准备好后, 自动处理需要打开的指令操作
     window.addEventListener('projectorWindowReady', function() {
+      console.log(">>> projector window ready");
       if (!isMainWindowReady) {
         isMainWindowReady = true;
+
         if (paramProjectPath) {
           setTimeout(function(){
             window.projectorOpenProject(paramProjectPath);
-          }, 300);
+          }, 200);
         }
 
         if (paramFilePath) {
           setTimeout(function(){
             window.projectorOpenFile(paramFilePath, paramLineNo);
-          }, 300);
+          }, 200);
         }
 
         if (paramTheme) {
           setTimeout(function(){
             window.projectorChangeTheme(paramTheme);
-          }, 300);
+          }, 200);
         }
       }
 
       // 手工触发下窗口resize事件,让IDEA自动适应浏览器窗口大小
       setTimeout(function(){
+        console.log(">>> projector window auto resize");
         window.dispatchEvent(new Event('resize'));
-      }, 1500);
+      }, 2000);
 
     });
 

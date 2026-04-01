@@ -24,16 +24,31 @@ class WindowDataEventsProcessor(private val windowManager: WebWindowManager) {
     process(ServerWindowSetChangedEvent(emptyList()))
   }
 
+  // 界面上发生的一系列交互基本上都会触发这个函数
   fun process(windowDataEvents: ServerWindowSetChangedEvent) {
+    /*
+      ParamsProvider.IDE_WINDOW_ID 用来在多项目打开情况下显示哪个项目窗口
+      假设你在服务器上的 IDEA 里同时打开了三个项目：Project_A, Project_B, Project_C, 
+      如果不加参数访问(http://.../?ideWindow=n), 三个项目窗口会全部叠在你的浏览器画布里.
+      可以利用参数(ideWindow)实现“多屏开发”, ideWindow 的值来自服务端依次渲染的多个项目窗口的索引值(从0开始计数)
+      可以打开三个浏览器的 Tab 页:
+        Tab1 访问：http://.../?ideWindow=0 （只显示 Project_A，B 和 C 被这段代码过滤掉了）
+        Tab2 访问：http://.../?ideWindow=1 （只显示 Project_B）
+        Tab3 访问：http://.../?ideWindow=2 （只显示 Project_C）
+    */
     val excludedWindows = when (val selectedId = ParamsProvider.IDE_WINDOW_ID) {
+      // 场景 A：URL 里没带 ideWindow 这个参数（默认情况）
       null -> emptyList()
 
+      // 场景 B：URL 里指定了 ideWindow（例如 ideWindow = 1）
       else -> windowDataEvents.windowDataList
         .filter { it.windowType == WindowType.IDEA_WINDOW }
         .sortedBy(WindowData::id)
+        // 把索引【不等于】 selectedId 的主窗口全挑出来，放到“排除名单”里
         .filterIndexed { index, _ -> index != selectedId }
     }
     excludedWindowIds = excludedWindows.map(WindowData::id)  // todo: try to use ClientWindowInterestEvent instead of filtering on client
+    // 最终要在画布上呈现的窗口 = 服务器发来的所有窗口 - 被排除的窗口
     val presentedWindows = windowDataEvents.windowDataList.subtract(excludedWindows)
 
     removeAbsentWindows(presentedWindows)

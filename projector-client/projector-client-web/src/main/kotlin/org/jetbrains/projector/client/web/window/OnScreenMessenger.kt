@@ -54,6 +54,7 @@ object OnScreenMessenger : LafListener {
       event.preventDefault() 
       val dyncWindow = window.asDynamic()
       if (dyncWindow.reconnectProjector != undefined) {
+        p.innerHTML = "<span style=\"display:block;text-align:center;color:#0000ff;\">正在重新连接中...</span>"
         dyncWindow.reconnectProjector()
       } else {
         window.location.reload()
