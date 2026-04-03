@@ -42,7 +42,6 @@ object OnScreenMessenger : LafListener {
   private val reload = (document.createElement("div") as HTMLDivElement).apply {
     //innerHTML = "<p>If you wish, you can try to <a onclick='location.reload();' href=''>reconnect</a>.</p>"
     //innerHTML = "<p>如果您愿意，您可以尝试 <a onclick='window.reconnectProjector();' href='javascript:void(0)'>重新连接</a>.</p>"
-    
     val p = document.createElement("p") as HTMLParagraphElement
     p.textContent = "如果您愿意，您可以尝试 "
 
@@ -51,10 +50,11 @@ object OnScreenMessenger : LafListener {
     a.href = "javascript:void(0)"
     
     a.onclick = { event ->
-      event.preventDefault() 
+      event.preventDefault()
+      p.innerHTML = "<span style=\"display:block;text-align:center;color:#0000ff;\">正在重新连接中...</span>"
+
       val dyncWindow = window.asDynamic()
       if (dyncWindow.reconnectProjector != undefined) {
-        p.innerHTML = "<span style=\"display:block;text-align:center;color:#0000ff;\">正在重新连接中...</span>"
         dyncWindow.reconnectProjector()
       } else {
         window.location.reload()
